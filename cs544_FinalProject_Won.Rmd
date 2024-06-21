@@ -1,0 +1,366 @@
+---
+title: "Customers shopping analysis"
+author: "Laura Won"
+output:
+  html_document:
+    fig_width: 8
+    code_folding: hide
+    highlight: tango
+    toc: true
+    toc_float:
+      collapsed: true
+params:
+  fig_width: 8
+  fig_height: 4
+  plot_colors: ["blue", "gray", "lightblue", "pink"]
+  dataset_path: "E:/school-BU/BU/cs544 R/FINAL/New folder/shopping_behavior_updated.csv"
+  sample_size: 50
+  seed: 123
+   
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width=8, fig.height=4,
+                      echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+
+
+# Analyzing Trends in Customer Behaviors
+
+I decided to choose this topic for my future secondary career because the current job market is highly competitive, and I'm not sure when I will get hired. While waiting to get hired, and even after getting hired, I plan to become a small business owner as an online seller. Analyzing customer shopping preference data will give us insights into their preferences based on factors such as gender, age, items purchased, category, amount spent, location, size, color, season, discount promo codes applied, payment method, and purchase frequency. Analyzing customer shopping data will be crucial for understanding buying patterns and making informed decisions. This will allow me to understand shopping behavior patterns and apply data-driven insights for better decision-making as a seller.
+
+## Shoppers' Shopping Behavior Dataset
+### Best-Selling Products in Online Stores
+
+I want to see what would be the best selling items in online stores.
+
+```{r echo=TRUE}
+shoppers <- read.csv(params$dataset_path)
+
+#head(shoppers)
+
+plot_colors <- params$plot_colors
+
+#best selling items in barplot
+best_selling_item <- table(shoppers$Item.Purchased)
+barplot(best_selling_item,
+        col=plot_colors[1],
+        ylim=c(0,200),
+        xlab="items purchased",
+        ylab="frequency",
+        main="Frequency of Item Purchased",
+        las=2,
+        cex.names=0.7)
+
+#best selling category in barplot
+best_seller_table <- table(shoppers$Category)
+barplot(best_seller_table,
+        col=plot_colors[1],
+        ylim=c(0,2000),
+        xlab="Category",
+        ylab="Frequency",
+        main="Frequency of Category",
+        las=2, 
+        cex.names=0.8)
+
+#top5 best seller in clothing
+clothing_data <- subset(shoppers, Category== "Clothing")
+clothing_sales <- aggregate(Purchase.Amount..USD.~Item.Purchased, data=clothing_data, sum)
+top_clothing_items <- clothing_sales[order(-clothing_sales$Purchase.Amount..USD.),][1:5,]
+top_clothing_items
+
+#top5 best seller in accessories
+accessories_data <- subset(shoppers, Category=="Accessories")
+accessories_sales <- aggregate(Purchase.Amount..USD. ~ Item.Purchased, data=accessories_data, sum)
+top_accessories_item <- accessories_sales[order(-accessories_sales$Purchase.Amount..USD.),][1:5,]
+top_accessories_item
+
+
+```
+
+
+I see that clothing is the top seller overall. Within clothing, blouses are selling the best for $10,410, and jewelry is $10,010 for the top seller in the accessories category.
+
+## Gender distribution
+
+Looking at gender distribution, what percentage of online shoppers are men and women?
+
+
+### Gender ratio
+```{r echo=TRUE}
+
+#gender distribution
+#remove NA values from shoppers$gender
+shoppers$gender <- na.omit(shoppers$gender)
+shoppers_gender_table <- table(shoppers$Gender)
+gender_percentages <- round(100 * shoppers_gender_table / sum(shoppers_gender_table), 1)
+pie_chart_labels <- paste(names(shoppers_gender_table), gender_percentages, "%", sep=" ")
+pie(shoppers_gender_table, labels=pie_chart_labels, col=plot_colors[4:1], main="Gender Distribution of Shoppers")
+```
+Female shoppers make up 32% of the customer base, while males account for 68%.
+Is there a difference in the average purchase amount between male and female shoppers?
+Let's see how average purchase amount varies by gender.
+
+### Purchase amount by gender
+```{r echo=TRUE}
+
+#purchase amount by gender
+
+library(ggplot2)
+
+ggplot(shoppers, aes(x=Gender, y=Purchase.Amount..USD., fill=Gender)) +
+  geom_boxplot() +
+  labs(title="Purchase Amount by Gender", x="Gender", y="Purchase Amount (USD)") +
+  theme_minimal() +
+  theme(legend.position="none")
+```
+While the difference is relatively small, data suggests women spend a few dollars more on average per purchase.
+
+### Frequency of Purchases by Gender
+
+Analyzing purchase frequency, which gender exhibits a higher frequency of online shopping?
+
+```{r echo=TRUE}
+#frequency of purchases by gender
+library(dplyr)
+cleaned_shoppers <- shoppers %>%
+  filter(!is.na(Gender) & !is.na(Purchase.Amount..USD.) & !is.na(Promo.Code.Used))
+
+frequency_gender <- cleaned_shoppers %>%
+  group_by(Gender, Frequency.of.Purchases) %>%
+  summarise(count = n()) %>%
+  arrange(Gender, Frequency.of.Purchases)
+
+ggplot(frequency_gender, aes(x=Frequency.of.Purchases, y=count, fill=Gender)) +
+  geom_bar(stat="identity", position="dodge") +
+  labs(title="Frequency of Purchases by Gender",
+       x="Frequency of Purchases",
+       y="Count",
+       fill="Gender") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=45, hjust=1))
+```
+Generally, men shop twice as often as women.
+
+### What male shoppers normally buy?
+
+Now that we know men shop more frequently, let's explore what they typically purchase.
+
+```{r echo=TRUE}
+#filter the data for male shoppers
+male_shoppers <- cleaned_shoppers %>%
+  filter(Gender == "Male")
+
+#create a histogram of items purchased by male shoppers
+ggplot(male_shoppers, aes(x = Item.Purchased, fill = Item.Purchased)) +
+  geom_histogram(stat = "count", fill = plot_colors[3], color = plot_colors[2], bins = 30) +
+  labs(title = "Items Purchased by Male Shoppers",
+       x = "Item Purchased",
+       y = "Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Pants are the most popular items purchased by male shoppers.
+Compared to the general clothing category, blouses are the top seller, and they fall under women's clothing.
+Even though there are fewer female shoppers than males, women might spend more money on average due to buying blouses.
+For those seeking a reliable customer base with a consistent purchase item, male shoppers buying pants would be a good target audience.
+
+### Interpretations of the features
+
+Let's find out relationships of numerous features.
+ Age, purchase amount$, review rating, and previous purchases
+
+```{r echo=TRUE}
+male_shoppers <- cleaned_shoppers %>%
+  filter(Gender == "Male")
+
+numeric_columns <- c('Age', 'Purchase.Amount..USD.', 'Review.Rating', 'Previous.Purchases')
+
+shopper_male_selected <- male_shoppers[, numeric_columns]
+
+pairs(shopper_male_selected, pch = 16, col = plot_colors[2])
+
+pairs_cm <- round(cor(shopper_male_selected), 2)
+pairs_cm
+
+```
+
+Age & Previous purchases, and purchase amount & review rating show a significant tendency within the data, but there isn't a very strong correlation between these factors. 
+
+## Sampling methods
+### Central Limit Theorem
+
+Using 1000 samples of size 50 from the population data, calculate the mean of each sample to determine the highest frequency shopping budget in terms of the mean purchase amount (USD).
+
+```{r echo=TRUE}
+set.seed(params$seed)
+sample_means <- replicate(1000, mean(sample(shopper_male_selected$Purchase.Amount..USD., params$sample_size, replace = TRUE)))
+ggplot(data.frame(sample_means), aes(x = sample_means)) +
+  geom_histogram(bins = 30, fill = plot_colors[3], color = plot_colors[2]) +
+  labs(title = "Distribution of Sample Means (n=50)",
+       x = "Sample Mean of Purchase Amount (USD)",
+       y = "Frequency") +
+  theme_minimal()
+
+```
+Around $58,$59 is the sample mean of the purchase amount for the highest frequency in shopping.
+
+
+### Simple Random Sampling
+ Let's see what would be different in sampling methods. 
+
+```{r echo = TRUE}
+
+
+set.seed(123)  #set.seed(params$seed) I tried to use it to avoid hardcoding, but it constantly changed value.
+sample_size <- 100 #sample_size <- params$sample_size  not returning consistent outcome
+
+simple_random_sample <- shoppers[sample(nrow(shoppers), sample_size, replace = FALSE), ]
+
+str(simple_random_sample)
+
+library(ggplot2)
+ggplot(simple_random_sample, aes(x = Item.Purchased)) +
+  geom_bar(color = plot_colors[4]) +
+  labs(title = "Items Purchased in Simple Random Sample",
+       x = "Item Purchased",
+       y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+Jewelry is the highest purchased in simple random sample. 
+
+### Stratified Sampling
+Gender-based differences in purchase amount
+ 
+```{r echo = TRUE}
+strata <- c("Male", "Female")
+stratum_sample_size <- 50 #params$sample_size<- tried use for avoid hardcoding, but not returning consistent outcome
+
+stratified_sample <- shoppers %>%
+  group_by(Gender) %>%
+  sample_n(size = stratum_sample_size, replace = FALSE)
+
+str(stratified_sample)
+
+#create a boxplot of purchase amounts by gender
+ggplot(stratified_sample, aes(x = Gender, y = Purchase.Amount..USD., fill = Gender)) +
+  geom_boxplot() +
+  labs(title = "Purchase Amount by Gender in Stratified Sample",
+       x = "Gender",
+       y = "Purchase Amount (USD)") +
+  theme_minimal()
+
+```
+
+While this sample shows males purchasing slightly more on average, it's important to remember that using samples can lead to different outcomes than the results from the whole dataset.  In the whole dataset, pants are the best-selling item, and females spend slightly more on average than males. 
+
+Therefore, samples can be a powerful tool for analysis, it's important to ensure they are chosen carefully to represent the entire population.
+
+
+## Wrangling Techniques
+### Best selling color and size
+
+Let's identify the best-selling colors and sizes to minimize the risk of excess inventory.
+
+```{r echo = TRUE}
+
+
+library(tibble)
+
+male_preference <- as_tibble(male_shoppers)
+
+male_preference
+
+glimpse(male_shoppers)
+
+library(dplyr)
+#best selling color for male shoppers
+best_color <- male_shoppers %>%
+  group_by(Color) %>%
+  summarise(total_sales = n()) %>%
+  arrange(desc(total_sales)) %>%
+  slice(1)  # Select the top-selling color
+
+best_color
+
+#best selling size for male shoppers
+best_size <- male_shoppers %>%
+  group_by(Size) %>%
+  summarise(total_sales = n()) %>%
+  arrange(desc(total_sales)) %>%
+  slice(1)  # Select the top-selling size
+
+best_size
+
+#see sales numbers in colors
+color_sales <- male_shoppers %>%
+  group_by(Color) %>%
+  summarise(total_sales = n()) %>%
+  arrange(desc(total_sales))
+color_sales
+
+color_size_counts <- male_shoppers %>%
+  group_by(Size, Color) %>%
+  summarise(total_sales = n()) %>%
+  arrange(Size, desc(total_sales))
+
+
+
+```
+Based on the color and size counts, silver color and size medium is the best selling. 
+And silver and cyan, teal and olive has not too different in total sales. 
+
+
+# Plots for color and size in total sales
+
+
+```{r echo = TRUE}
+
+unique_colors <- unique(color_size_counts$Color)
+
+custom_palette <- rainbow(length(unique_colors))
+
+ggplot(color_size_counts, aes(x = Size, y = total_sales, fill = Color)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Color Distribution Across Sizes for Male Shoppers",
+       x = "Size",
+       y = "Total Sales",
+       fill = "Color") +
+  scale_fill_manual(values = custom_palette) +  # Apply custom color palette
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "right")
+
+```
+It may seem like olive has the highest sales in the medium size. However, considering total sales across all colors, silver is the best seller.
+
+# Conclusions
+
+By analyzing customer shopping behavior data, we gained valuable insights that can be applied to online store operations. We discovered that:
+
+### Clothing is the top-selling category, 
+with blouses leading the pack for women and jewelry for accessories.
+
+### Men shop more frequently
+than women, but women spend slightly more per purchase on average.
+
+### Pants are the most popular item among male shoppers, 
+while blouses dominate women's purchases.
+
+### Age and previous purchases correlate with purchase amount,
+but the connection isn't very strong.
+
+### Sampling methods can yield different results 
+compared to the entire dataset.
+
+### Silver is the overall best-selling color, 
+while medium is the most popular size. However, other colors like olive and cyan show promising sales potential.
+
+These findings suggest that targeting strategies should consider both gender and product preferences. While men might be a larger customer base due to purchase frequency, focusing on women's higher average spending power with targeted clothing choices like blouses could be equally beneficial.
+
+Overall, data-driven analysis of customer behavior allows us to make informed decisions regarding inventory management, product offerings, and marketing strategies to optimize online store success.
